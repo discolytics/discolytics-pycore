@@ -1,0 +1,4 @@
+build
+discolytics/__pycache__
+discolytics.egg-info
+.venv
