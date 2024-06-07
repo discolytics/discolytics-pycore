@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='discolytics',
-    version='1.0.0',
+    version='1.0.1',
     author='Discolytics',
     author_email='collin@discolytics.com',
     description='Core python library for interfacing with Discolytics APIs',
