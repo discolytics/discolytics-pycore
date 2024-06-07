@@ -279,7 +279,7 @@ class Discolytics:
         if user['avatar'] is None:
             return 'https://cdn.discordapp.com/embed/avatars/0.png'
         else:
-            return f'https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png'
+            return f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png"
     
     def send_heartbeat(self):
         res = requests.post(f'{self.data_api_url}/bots/{self.bot_id}/heartbeat', headers={'Authorization': self.api_key})
