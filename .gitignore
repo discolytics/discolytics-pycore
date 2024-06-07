@@ -3,3 +3,4 @@ discolytics/__pycache__
 discolytics.egg-info
 .venv
 dist
+publish.txt
