@@ -27,6 +27,7 @@ discolytics = Discolytics({
     'api_key': os.getenv('DISCOLYTICS_KEY'),
     'auth': os.getenv('TOKEN'),
     'bot_id': 'YOUR_BOT_ID',
+    'cluster_id': 0 # if clustering, provide the current cluster ID
 })
 
 client = discord.Client(intents=discord.Intents.all(), enable_debug_events=True)
@@ -35,8 +36,11 @@ client = discord.Client(intents=discord.Intents.all(), enable_debug_events=True)
 async def on_ready():
     print(f'Client ready as {client.user}')
 
-    # discolytics.start_command returns a function. Run this function once the command ends.
-    end_command = discolytics.start_command(name='help', user_id='123')
+    # post shards to discolytics
+    discolytics.post_shards({'id': 0, 'status': 'ready', "latency": 1})
+
+    # discolytics.start_command returns a function. Run this function once the command ends. guild_id is optional.
+    end_command = discolytics.start_command(name='help', user_id='123', guild_id='123')
     sleep(5)
     # run end_command once the command ends
     end_command()

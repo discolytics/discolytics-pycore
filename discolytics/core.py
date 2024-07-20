@@ -1,10 +1,8 @@
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, List
 import requests
 import time
 import json
 import threading
-import psutil
-import os
 from . import __version__
 
 DISCORD_API_URL = 'https://discord.com/api/v10'
@@ -38,9 +36,15 @@ class Options(TypedDict):
     auth: str
     primary: Optional[bool]
     log_levels: Optional[LogLevels]
+    cluster_id: Optional[str]
 
 class Command(TypedDict):
     end: any
+
+class Shard(TypedDict):
+    id: int
+    status: str
+    latency: int
 
 class Discolytics:
     def __init__(self, options: Options):
@@ -67,6 +71,8 @@ class Discolytics:
         else:
             self.api_url = options.get('api_url')
 
+        self.cluster_id = options.get('cluster_id')
+
         self.auth = parse_token(options.get('auth'))
 
         if options.get('primary') is None:
@@ -88,35 +94,45 @@ class Discolytics:
             self.post_interactions()
             self.post_commands()
 
-        set_interval(post_data, 15)
+        set_interval(post_data, 10)
 
-        if self.primary:
-            self.patch_bot({})
-            self.get_bot()
+        self.patch_bot({})
+        self.get_bot()
 
-            def post_system_usage():
-                [cpu, mem] = self.get_system_usage()
-                self.post_cpu_usage(cpu)
-                self.post_mem_usage(mem)
-            set_interval(post_system_usage, 10)
+        self.send_heartbeat()
+        set_interval(self.send_heartbeat, 30)
 
-            self.send_heartbeat()
-            set_interval(self.send_heartbeat, 30)
-
-            self.post_guild_count()
-            set_interval(self.post_guild_count, 60 * 30)
+        self.post_guild_count()
+        set_interval(self.post_guild_count, 60 * 15)
 
         self.log(level='info', msg='Client ready')
+
+    def is_cluster(self):
+        return self.cluster_id is not None
     
-    def get_system_usage(self):
-        pid = os.getpid()
-        process = psutil.Process(pid)
-        cpu_usage = process.cpu_percent(interval=1)
-    
-        memory_info = process.memory_info()
-        memory_usage = memory_info.rss
+    def post_shards(self, shards: List[Shard]):
+        if self.is_cluster():
+            return self.post_cluster(shards)
         
-        return [cpu_usage, memory_usage]
+        res = requests.put(f'{self.data_api_url}/bots/{self.bot_id}/shards', headers={'Authorization': self.api_key, 'Content-Type': 'application/json'}, json={'shards': shards})
+        if res.status_code != 201:
+            self.log(level='error', msg='Failed to post shards')
+            return False
+        
+        self.log(level='debug', msg=f'Posted shards {len(shards)}')
+        return True
+    
+    def post_cluster(self, shards: List[Shard]):
+        if self.is_cluster() == False:
+            return self.post_shards(shards)
+        
+        res = requests.put(f'{self.data_api_url}/bots/{self.bot_id}/clusters/{self.cluster_id}', headers={'Authorization': self.api_key, 'Content-Type': 'application/json'}, json={'shards': shards})
+        if res.status_code != 201:
+            self.log(level='error', msg=f'Failed to post cluster {self.cluster_id}')
+            return False
+        
+        self.log(level='debug', msg=f'Posted cluster {self.cluster_id} with {len(shards)} shards')
+        return True
 
     def log(self, level, msg):
         if self.log_levels.get(level) == False:
@@ -205,26 +221,8 @@ class Discolytics:
     def post_interaction(self, type: int, guild_id: Optional[str]):
         self.pending_interactions.append({'type': type, 'guild_id': guild_id})
         self.log(level='debug', msg=f'Added interaction to queue : {type} (Guild ID: {guild_id})')
-
-    def post_cpu_usage(self, value: int):
-        res = requests.post(f'{self.data_api_url}/bots/{self.bot_id}/cpuUsage', headers={'Authorization': self.api_key, 'Content-Type': 'application/json'}, json={"value": value, 'clientType': self.client_type})
-
-        if res.status_code != 201:
-            self.log(level='error', msg=f'Failed to post CPU usage : {value}')
-            return False
-        
-        return True
     
-    def post_mem_usage(self, value: int):
-        res = requests.post(f'{self.data_api_url}/bots/{self.bot_id}/memUsage', headers={'Authorization': self.api_key, 'Content-Type': 'application/json'}, json={"value": value, 'clientType': self.client_type})
-
-        if res.status_code != 201:
-            self.log(level='error', msg=f'Failed to post memory usage : {value}')
-            return False
-        
-        return True
-    
-    def start_command(self, name: str, user_id: str) -> Command:
+    def start_command(self, name: str, user_id: str, guild_id: Optional[str]) -> Command:
         start = time.time() * 1000
         def end(metadata=None):
             json_string = None
@@ -234,7 +232,7 @@ class Discolytics:
             end = time.time() * 1000
             duration = int(end - start)
             
-            self.post_command(name=name, user_id=user_id, duration=duration, metadata=json_string)
+            self.post_command(name=name, user_id=user_id, duration=duration, guild_id=guild_id, metadata=json_string)
         
         return end
     
@@ -244,6 +242,7 @@ class Discolytics:
                 'name': command['name'],
                 'userId': command['user_id'],
                 'duration': command['duration'],
+                'guildId': command['guild_id'],
                 'metadata': command['metadata']
             }
 
@@ -262,8 +261,8 @@ class Discolytics:
             self.log(level='debug', msg=f'Posted {count} commands')
             return True
 
-    def post_command(self, name: str, user_id: str, duration: int, metadata: Optional[str]):
-        self.pending_commands.append({'name': name, 'user_id': user_id, 'duration': duration, 'metadata': metadata})
+    def post_command(self, name: str, user_id: str, duration: int, guild_id: Optional[str], metadata: Optional[str]):
+        self.pending_commands.append({'name': name, 'user_id': user_id, 'duration': duration, 'guild_id': guild_id, 'metadata': metadata})
         self.log(level='debug', msg=f'Added command to queue : {name} (User ID: {user_id})')
 
     def get_bot_user(self):
