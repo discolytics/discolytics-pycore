@@ -99,9 +99,6 @@ class Discolytics:
         self.patch_bot({})
         self.get_bot()
 
-        self.send_heartbeat()
-        set_interval(self.send_heartbeat, 30)
-
         self.post_guild_count()
         set_interval(self.post_guild_count, 60 * 15)
 
@@ -222,7 +219,7 @@ class Discolytics:
         self.pending_interactions.append({'type': type, 'guild_id': guild_id})
         self.log(level='debug', msg=f'Added interaction to queue : {type} (Guild ID: {guild_id})')
     
-    def start_command(self, name: str, user_id: str, guild_id: Optional[str]) -> Command:
+    def start_command(self, name: str, user_id: str, guild_id: Optional[str] = None) -> Command:
         start = time.time() * 1000
         def end(metadata=None):
             json_string = None
@@ -261,7 +258,7 @@ class Discolytics:
             self.log(level='debug', msg=f'Posted {count} commands')
             return True
 
-    def post_command(self, name: str, user_id: str, duration: int, guild_id: Optional[str], metadata: Optional[str]):
+    def post_command(self, name: str, user_id: str, duration: int, guild_id: Optional[str] = None, metadata: Optional[str] = None):
         self.pending_commands.append({'name': name, 'user_id': user_id, 'duration': duration, 'guild_id': guild_id, 'metadata': metadata})
         self.log(level='debug', msg=f'Added command to queue : {name} (User ID: {user_id})')
 
@@ -279,15 +276,6 @@ class Discolytics:
             return 'https://cdn.discordapp.com/embed/avatars/0.png'
         else:
             return f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png"
-    
-    def send_heartbeat(self):
-        res = requests.post(f'{self.data_api_url}/bots/{self.bot_id}/heartbeat', headers={'Authorization': self.api_key})
-
-        if res.status_code != 201:
-            self.log(level='error', msg='Failed to send heartbeat')
-            return False
-        else:
-            return True
         
     def get_application(self):
         res = requests.get(f'{DISCORD_API_URL}/applications/@me', headers={'Authorization': self.auth})
