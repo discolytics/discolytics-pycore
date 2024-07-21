@@ -189,7 +189,7 @@ class Discolytics:
             self.log(level='debug', msg=f'Posted {count} events')
             return True
         
-    def send_event(self, name: str, guild_id: Optional[str]):
+    def send_event(self, name: str, guild_id: Optional[str] = None):
         self.pending_events.append({'name': name, 'guild_id': guild_id})
         self.log(level='debug', msg=f'Added event to queue : {name} (Guild ID: {guild_id})')
 
@@ -215,7 +215,7 @@ class Discolytics:
             self.log(level='debug', msg=f'Posted {count} interactions')
             return True
         
-    def post_interaction(self, type: int, guild_id: Optional[str]):
+    def post_interaction(self, type: int, guild_id: Optional[str] = None):
         self.pending_interactions.append({'type': type, 'guild_id': guild_id})
         self.log(level='debug', msg=f'Added interaction to queue : {type} (Guild ID: {guild_id})')
     
